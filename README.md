@@ -2,9 +2,11 @@
 
 ## 又一个使用说明
 
-1. 去github action下载编译好的文件，传到你的路由上面去
+1. 去github action下载编译好的文件，传到你的路由上面去。如果不是ARM Cortex-A7的话请你fork本仓库，然后修改action配置文件里的go build编译选项为你的架构。
 2. 下载check_and_run.sh，传到你的路由上面去
+3. 去crontab设置定时任务
 
+--------
 
 这下不需要Webview，可以在硬路由上跑了😋
 
