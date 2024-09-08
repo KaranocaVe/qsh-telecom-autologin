@@ -1,0 +1,40 @@
+name: Build for ARM Cortex-A7
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.17'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Build for ARM Cortex-A7
+      run: |
+            CGO_ENABLED=0 GOARCH=arm GOARM=7 GOOS=linux go build -ldflags="-s -w" -o login-arm-cortex-a7
+            upx -9 login-arm-cortex-a7
+      env:
+        GOARCH: arm
+        GOARM: 7
+        GOOS: linux
+
+    - name: Archive build
+      uses: actions/upload-artifact@v2
+      with:
+        name: login-arm-cortex-a7
+        path: ./login-arm-cortex-a7
