@@ -34,7 +34,7 @@ jobs:
         GOOS: linux
 
     - name: Archive build
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: login-arm-cortex-a7
         path: ./login-arm-cortex-a7
