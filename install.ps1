@@ -93,8 +93,9 @@ Write-Host "清理旧安装..."
 $CleanupCommands = @"
 rm -f /data/login /data/check_network.sh /data/refresh_lease.sh /data/login_cache.json
 crontab -l 2>/dev/null | grep -v "check_network.sh" | grep -v "refresh_lease.sh" | crontab - || true
-if [ -f /etc/rc.local ]; then
-    sed -i '/check_network.sh/d' /etc/rc.local
+if [ -f /etc/init.d/telecom_login ]; then
+    /etc/init.d/telecom_login disable 2>/dev/null || true
+    rm -f /etc/init.d/telecom_login
 fi
 echo "清理完成"
 "@
@@ -124,22 +125,32 @@ cat >> /tmp/crontab.new << 'CRON'
 CRON
 crontab /tmp/crontab.new
 
-# 配置开机自启
-if ! grep -q "check_network.sh" /etc/rc.local 2>/dev/null; then
-    if [ ! -f /etc/rc.local ]; then
-        cat > /etc/rc.local << 'RCLOCAL'
-#!/bin/sh
-sleep 60
-/data/check_network.sh &
-exit 0
-RCLOCAL
-        chmod +x /etc/rc.local
-    else
-        sed -i '/^exit 0/i sleep 60' /etc/rc.local
-        sed -i '/^exit 0/i /data/check_network.sh &' /etc/rc.local
-    fi
-fi
+# 配置开机自启 - 使用 OpenWRT init.d 方式
+cat > /etc/init.d/telecom_login << 'INITD'
+#!/bin/sh /etc/rc.common
 
+START=99
+STOP=10
+
+start() {
+    # 等待网络稳定
+    (sleep 30 && /data/check_network.sh) &
+}
+
+stop() {
+    return 0
+}
+
+restart() {
+    stop
+    start
+}
+INITD
+
+chmod +x /etc/init.d/telecom_login
+/etc/init.d/telecom_login enable
+
+echo "已配置开机自启动 (init.d)"
 echo "配置完成"
 "@
 
