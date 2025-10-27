@@ -137,15 +137,20 @@ jobs:
         cp "${OUTPUT_NAME}" "${UPX_NAME}"
         upx -9 "${UPX_NAME}" || echo "UPX compression failed for ${{ matrix.name }}"
         
-        if [ -f "${UPX_NAME}" ]; then
-          echo "Compressed: ${UPX_NAME}"
-          ls -lh "${UPX_NAME}"
-        fi
+        echo "Build artifacts:"
+        ls -lh login-${{ matrix.name }}*
 
-    - name: Upload artifacts
+    - name: Upload original binary
       uses: actions/upload-artifact@v4
       with:
         name: login-${{ matrix.name }}
-        path: |
-          login-${{ matrix.name }}*
+        path: login-${{ matrix.name }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+        retention-days: 30
+
+    - name: Upload UPX compressed binary
+      uses: actions/upload-artifact@v4
+      if: hashFiles('login-${{ matrix.name }}-upx*') != ''
+      with:
+        name: login-${{ matrix.name }}-upx
+        path: login-${{ matrix.name }}-upx${{ matrix.goos == 'windows' && '.exe' || '' }}
         retention-days: 30
