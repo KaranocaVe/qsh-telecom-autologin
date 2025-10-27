@@ -134,11 +134,21 @@ jobs:
           UPX_NAME="${UPX_NAME}.exe"
         fi
         
-        cp "${OUTPUT_NAME}" "${UPX_NAME}"
-        upx -9 "${UPX_NAME}" || echo "UPX compression failed for ${{ matrix.name }}"
+        echo "Original size:"
+        ls -lh "${OUTPUT_NAME}"
         
-        echo "Build artifacts:"
-        ls -lh login-${{ matrix.name }}*
+        cp "${OUTPUT_NAME}" "${UPX_NAME}"
+        
+        echo "Compressing with UPX..."
+        if upx --best --lzma "${UPX_NAME}"; then
+          echo "Compressed size:"
+          ls -lh "${UPX_NAME}"
+          echo "UPX_SUCCESS=true" >> $GITHUB_ENV
+        else
+          echo "UPX compression failed for ${{ matrix.name }}, removing compressed file"
+          rm -f "${UPX_NAME}"
+          echo "UPX_SUCCESS=false" >> $GITHUB_ENV
+        fi
 
     - name: Upload original binary
       uses: actions/upload-artifact@v4
@@ -149,7 +159,7 @@ jobs:
 
     - name: Upload UPX compressed binary
       uses: actions/upload-artifact@v4
-      if: hashFiles('login-${{ matrix.name }}-upx*') != ''
+      if: env.UPX_SUCCESS == 'true'
       with:
         name: login-${{ matrix.name }}-upx
         path: login-${{ matrix.name }}-upx${{ matrix.goos == 'windows' && '.exe' || '' }}
