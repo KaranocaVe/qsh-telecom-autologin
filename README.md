@@ -12,11 +12,24 @@
 - 定时刷新租期
 - 内存占用极低
 
+## 获取编译文件
+
+### 从 GitHub Actions 下载（推荐）
+
+1. 访问本项目的 [Actions 页面](../../actions)
+2. 点击最新的成功构建（绿色对勾 ✓）
+3. 滚动到页面底部的 **Artifacts** 部分
+4. 下载对应平台的文件：
+   - `login-平台名` - 原始版本（约 5-8 MB）
+   - `login-平台名-upx` - UPX 压缩版本（约 1.5-3 MB，推荐）
+
+**支持的平台**：linux-amd64, linux-armv7, linux-mipsle, windows-amd64, darwin-arm64 等 19+ 平台
+
 ## 快速开始
 
 ### 方式一：自动安装（推荐，适用于 OpenWRT 路由器）
 
-1. 下载对应平台的编译文件到本地
+1. 从 GitHub Actions 下载对应平台的编译文件
 2. 修改 `install.sh` 中的账号密码
 3. 运行安装脚本：
 
@@ -34,7 +47,7 @@
 
 ### 方式二：手动使用
 
-下载对应平台的可执行文件，运行：
+从 GitHub Actions 下载对应平台的可执行文件，运行：
 
 ```bash
 # 登录
@@ -52,7 +65,7 @@
 
 ## 支持平台
 
-GitHub Actions 自动构建以下平台，每个平台提供原始版本和 UPX 压缩版本：
+每次推送代码后，GitHub Actions 自动构建以下平台：
 
 ### Linux
 
