@@ -17,8 +17,8 @@ import (
 	"time"
 )
 
-// So what's this and why is it there?
-var confusingString = ">111111111"
+// 电信认证协议要求的密码填充字符串
+var passwordPadding = ">111111111"
 
 var baseHeader = map[string]string{
 	"Accept":          "*/*",
@@ -47,7 +47,7 @@ type loginClient struct {
 func (c *loginClient) Get(urlString string) *http.Response {
 	req, err := http.NewRequest("GET", urlString, nil)
 	if err != nil {
-		log.Panic("Cannot make request: ", err)
+		log.Fatal("Cannot make request: ", err)
 	}
 
 	return c.Do(req)
@@ -56,13 +56,13 @@ func (c *loginClient) Get(urlString string) *http.Response {
 func (c *loginClient) Post(urlString string, body io.Reader) *http.Response {
 	req, err := http.NewRequest("POST", urlString, body)
 	if err != nil {
-		log.Panic("Cannot make request: ", err)
+		log.Fatal("Cannot make request: ", err)
 	}
 
 	return c.Do(req)
 }
 
-func (c *loginClient) Do(req *http.Request) *http.Response {
+func (c *loginClient) initHTTPClient() {
 	var dialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	if c.localIP != "" {
@@ -93,19 +93,20 @@ func (c *loginClient) Do(req *http.Request) *http.Response {
 	c.c.Transport = &http.Transport{
 		DialContext: dialContext,
 	}
-
-	for k, v := range baseHeader {
-		req.Header.Add(k, v)
-	}
-	// disable 302 redirect in http module itself
 	c.c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 	c.c.Timeout = 20 * time.Second
+}
+
+func (c *loginClient) Do(req *http.Request) *http.Response {
+	for k, v := range baseHeader {
+		req.Header.Add(k, v)
+	}
 
 	resp, err := c.c.Do(req)
 	if err != nil {
-		log.Panic("Cannot connect: ", err)
+		log.Fatal("Cannot connect: ", err)
 	}
 
 	return resp
@@ -113,19 +114,25 @@ func (c *loginClient) Do(req *http.Request) *http.Response {
 
 func (c *loginClient) PasswordEncrypt() {
 	if (c.modulus != "") && (c.exponent != "") && (c.password != "") {
-		c.password = c.password + confusingString
+		c.password = c.password + passwordPadding
 		// just very simple RSA with no padding
-		m, _ := new(big.Int).SetString(c.modulus, 16)
-		e, _ := new(big.Int).SetString(c.exponent, 16)
+		m, ok := new(big.Int).SetString(c.modulus, 16)
+		if !ok {
+			log.Fatal("Invalid modulus format")
+		}
+		e, ok := new(big.Int).SetString(c.exponent, 16)
+		if !ok {
+			log.Fatal("Invalid exponent format")
+		}
 		p := new(big.Int).SetBytes([]byte(c.password))
 		crypted := new(big.Int).Exp(p, e, m)
 		c.passwordEnc = hex.EncodeToString(crypted.Bytes())
 	} else if c.passwordEnc != "" {
 		return
 	} else if c.password == "" {
-		log.Panic("Cannot encrypt password: password not given")
+		log.Fatal("Cannot encrypt password: password not given")
 	} else {
-		log.Panic("Cannot encrypt password: not enough arguments")
+		log.Fatal("Cannot encrypt password: not enough arguments")
 	}
 }
 
@@ -136,8 +143,8 @@ func (c *loginClient) myPost(urlString string, reqData map[string]string, respDa
 	}
 	body := strings.NewReader(formData.Encode())
 	resp := c.Post(urlString, body)
-	_ = json.NewDecoder(resp.Body).Decode(respData)
 	defer resp.Body.Close()
+	_ = json.NewDecoder(resp.Body).Decode(respData)
 }
 
 func (c *loginClient) loginInit() {
@@ -146,10 +153,12 @@ func (c *loginClient) loginInit() {
 		resp := c.Get(urlString)
 		if resp.StatusCode == http.StatusFound {
 			urlString = resp.Header.Get("Location")
+			resp.Body.Close()
 		} else {
 			u, err := url.Parse(urlString)
+			resp.Body.Close()
 			if err != nil {
-				log.Panic("Returned illegal url '", urlString, "': ", err)
+				log.Fatal("Returned illegal url '", urlString, "': ", err)
 			}
 			c.loginHost = u.Host
 			c.queryString = u.RawQuery
@@ -201,7 +210,7 @@ func (c *loginClient) login() {
 		c.userIndex = respData.UserIndex
 		log.Print("Successfully logged in with account '", c.username, "'")
 	} else {
-		log.Panic("Login attempt failed with account '", c.username, "'")
+		log.Fatal("Login attempt failed with account '", c.username, "'")
 	}
 }
 
@@ -218,7 +227,7 @@ func (c *loginClient) logout() {
 	if respData.Result == "success" {
 		log.Print("Successfully logged out")
 	} else {
-		log.Panic("Logout attempt failed, maybe user index has expired")
+		log.Fatal("Logout attempt failed, maybe user index has expired")
 	}
 }
 
@@ -242,7 +251,7 @@ func (c *loginClient) loadCache() {
 	fileCache := cache{}
 	err = json.Unmarshal([]byte(file), &fileCache)
 	if err != nil {
-		log.Panic("Cannot parse cache file: ", err)
+		log.Fatal("Cannot parse cache file: ", err)
 	}
 	if c.username == "" {
 		c.username = fileCache.Username
@@ -272,7 +281,7 @@ func (c *loginClient) saveCache() {
 	path, _ := filepath.Abs(c.cachePath)
 	err := os.WriteFile(path, file, 0666)
 	if err != nil {
-		log.Panic("Failed to write to cache file: ", err)
+		log.Fatal("Failed to write to cache file: ", err)
 	}
 }
 
@@ -286,9 +295,11 @@ func (c *loginClient) run() {
 	logout := flag.Bool("logout", false, "Whether to log out current user")
 	flag.Parse()
 
+	c.initHTTPClient()
+
 	if !*logout {
 		if (c.cachePath == "") && (c.username == "" || c.password == "") {
-			log.Panic("Not enough argument for login. See --help for explanation")
+			log.Fatal("Not enough argument for login. See --help for explanation")
 		}
 		c.loadCache()
 		c.loginInit()
@@ -297,7 +308,7 @@ func (c *loginClient) run() {
 		c.saveCache()
 	} else {
 		if (c.cachePath == "") && (c.userIndex == "") {
-			log.Panic("Not enough argument for logout. See --help for explanation")
+			log.Fatal("Not enough argument for logout. See --help for explanation")
 		}
 		c.loadCache()
 		c.logout()
@@ -305,7 +316,6 @@ func (c *loginClient) run() {
 }
 
 func main() {
-	defer os.Exit(1)
 	client := &loginClient{}
 	client.run()
 	os.Exit(0)

@@ -1,31 +1,177 @@
-# 电子科技大学清水河校区本科宿舍电信自动登录脚本
+# 电子科技大学清水河校区电信自动登录
 
-## 又一个使用说明
+适用于电子科技大学清水河校区本科宿舍电信网络的自动登录工具，专为路由器等嵌入式设备设计。
 
-1. 去github action下载编译好的文件，传到你的路由上面去。如果不是ARM Cortex-A7的话请你fork本仓库，然后修改actions配置文件里的go build编译选项为你的架构。
-2. 下载check_and_run.sh，修改登陆程序的位置，把你自己的账号密码填进去，传到你的路由上面去
-3. 设置开机时自动运行脚本（你可能需要考虑sleep几秒钟）
-4. 不放心的去crontab设置定时任务，每30-60分钟就执行一次
+## 特性
 
-## 本fork的目的
+- 纯 Go 语言编写，无需运行时依赖
+- 静态编译，单个可执行文件
+- 支持 19+ 平台架构
+- 密码 RSA 加密存储
+- 自动网络检测
+- 定时刷新租期
+- 内存占用极低
 
-1. No Nix
-2. 编译时经过了奇妙的优化，让编译出来的文件体积大大减小，只要你的路由器还有1.5兆左右的空间就能跑。
+## 快速开始
 
---------
+### 方式一：自动安装（推荐，适用于 OpenWRT 路由器）
 
-这下不需要Webview，可以在硬路由上跑了😋
+1. 下载对应平台的编译文件到本地
+2. 修改 `install.sh` 中的账号密码
+3. 运行安装脚本：
 
-请注意：与[UESTC-QingShuiHe-SRUN-TELECOM](https://github.com/coolmoon327/UESTC-QingShuiHe-SRUN-TELECOM)不同，这个脚本并不会在后台保持登陆状态。你需要写一个简单的wrapper来检查联网状态，并在适当的时候启动这个脚本。为什么不检查联网状态呢？因为
+```bash
+./install.sh
+```
 
-1. 我不想间断地ping登陆网页的地址，同时各个系统都应该有方便的检查联网状态的方式。
-2. 掉登录后，仍要等到当前DHCP获取的IP过期后才能重新登录，并且刷新DHCP这个动作没有特权是没法完成的。
+安装脚本会自动：
 
-## 使用说明
-1. 登录时，只需要在`-name`和`-passwd`参数后填写用户名和密码。目前使用的默认登录地址是`172.25.249.70`，如果电信某一天又更改了登录地址，在`-host`后面填写更改后的IP地址。
-2. 如果需要存储账号和密码（密码由电信下发的RSA公钥加密存储），在`-cache`后填写文件的地址（包括文件名），例如`-cache ./cache.json`，在登录成功后会保存。下次仍需手动指定`-cache`读取。
-3. 如果需要登出（应该不会需要），添加`-logout`参数，不需要指定账号和密码，但是需要指定`-index`（要抓包才知道），但是也可以直接用上次登录的cache。
-4. 编译好的二进制文件可以在Actions里面下载，如果你需要其他架构可以提issue。
+- 清理旧安装
+- 上传登录程序到路由器
+- 配置定时任务（每小时检查网络）
+- 配置自动刷新（每天凌晨 5 点）
+- 配置开机自启动
 
-## 友情链接
-如果你需要校园网登陆，可以使用[go-nd-portal](https://github.com/fumiama/go-nd-portal)。这个项目的作者[@fumiama](https://github.com/fumiama)是我最崇敬的网络工程师与Golang程序员。同时，你也可以使用由世界上最棒的语言®重写的版本[nd-portal](https://github.com/NetUnion/nd-portal)。
+### 方式二：手动使用
+
+下载对应平台的可执行文件，运行：
+
+```bash
+# 登录
+./login -name 手机号 -passwd 密码
+
+# 使用缓存（密码加密存储）
+./login -name 手机号 -passwd 密码 -cache ./cache.json
+
+# 下次使用缓存登录
+./login -cache ./cache.json
+
+# 登出
+./login -cache ./cache.json -logout
+```
+
+## 支持平台
+
+GitHub Actions 自动构建以下平台，每个平台提供原始版本和 UPX 压缩版本：
+
+### Linux
+
+- `linux-amd64` - x86_64 服务器/PC
+- `linux-386` - 32 位 x86
+- `linux-arm64` - ARM64 (树莓派 4 等)
+- `linux-armv7` - ARMv7 (小米路由器、树莓派 2/3)
+- `linux-armv6` - ARMv6 (树莓派 1)
+- `linux-armv5` - ARMv5 (老旧 ARM 设备)
+- `linux-mips` / `linux-mipsle` - MIPS 路由器
+- `linux-mips64` / `linux-mips64le` - 64 位 MIPS
+- `linux-ppc64le` - IBM POWER
+- `linux-riscv64` - RISC-V
+
+### macOS
+
+- `darwin-amd64` - Intel Mac
+- `darwin-arm64` - Apple Silicon (M1/M2/M3)
+
+### Windows
+
+- `windows-amd64` - 64 位 Windows
+- `windows-386` - 32 位 Windows
+- `windows-arm64` - ARM64 Windows
+
+### FreeBSD
+
+- `freebsd-amd64` / `freebsd-arm64` - pfSense/OPNsense 等
+
+## 命令行参数
+
+```
+-name string
+    账号名，通常是手机号
+
+-passwd string
+    账号密码
+
+-host string
+    登录服务器地址 (默认: 172.25.249.64)
+
+-cache string
+    缓存文件路径，用于加密存储密码和会话信息
+
+-localip string
+    绑定的本地 IP 地址
+
+-logout
+    登出当前会话
+
+-index string
+    用户索引（仅登出时需要，或从缓存读取）
+```
+
+## 安装脚本配置
+
+编辑 `install.sh` 顶部配置：
+
+```bash
+ROUTER_IP="192.168.1.1"    # 路由器 IP
+ROUTER_USER="root"          # SSH 用户名
+PHONE="手机号"              # 电信账号
+PASSWORD="密码"             # 电信密码
+```
+
+### 功能说明
+
+安装后自动配置：
+
+1. **开机启动** - 启动 60 秒后自动检查并登录
+2. **定时检查** - 每小时检查网络连通性（ping 8.8.8.8）
+3. **定时刷新** - 每天凌晨 5 点登出再登录，刷新租期
+4. **日志记录** - 保存最后一次运行状态到 `/tmp/telecom_login.log`
+
+### 查看运行状态
+
+```bash
+# 查看日志
+ssh root@192.168.1.1 'cat /tmp/telecom_login.log'
+
+# 手动运行检查
+ssh root@192.168.1.1 '/data/check_network.sh'
+
+# 查看定时任务
+ssh root@192.168.1.1 'crontab -l'
+```
+
+## 注意事项
+
+1. **网络检查间隔** - 掉线后需等到 DHCP 租期过期才能重新登录
+2. **密码安全** - 缓存文件包含加密后的密码，注意保护
+3. **路由器兼容性** - 主要针对 OpenWRT 测试，其他系统可能需要调整
+4. **登录地址** - 默认 `172.25.249.64`，如变更请使用 `-host` 参数
+
+## 常见问题
+
+### Q: 如何确定我的路由器架构？
+
+```bash
+uname -m
+```
+
+- `armv7l` → linux-armv7
+- `mips` → linux-mips 或 linux-mipsle
+- `aarch64` → linux-arm64
+- `x86_64` → linux-amd64
+
+### Q: 程序运行失败怎么办？
+
+1. 检查网络连接
+2. 确认登录地址是否正确
+3. 查看日志：`cat /tmp/telecom_login.log`
+4. 手动运行测试：`/data/login -name 账号 -passwd 密码`
+
+### Q: 如何卸载？
+
+```bash
+ssh root@路由器IP
+rm -f /data/login /data/check_network.sh /data/refresh_lease.sh /data/login_cache.json
+crontab -l | grep -v "check_network\|refresh_lease" | crontab -
+sed -i '/check_network.sh/d' /etc/rc.local
+```

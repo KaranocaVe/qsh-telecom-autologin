@@ -1,4 +1,4 @@
-name: Build for ARM Cortex-A7
+name: Build Multi-Platform Releases
 
 on:
   push:
@@ -11,30 +11,141 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux x86
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - goos: linux
+            goarch: "386"
+            name: linux-386
+          
+          # Linux ARM
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: "7"
+            name: linux-armv7
+          - goos: linux
+            goarch: arm
+            goarm: "6"
+            name: linux-armv6
+          - goos: linux
+            goarch: arm
+            goarm: "5"
+            name: linux-armv5
+          
+          # Linux MIPS (常见于路由器)
+          - goos: linux
+            goarch: mips
+            name: linux-mips
+          - goos: linux
+            goarch: mipsle
+            name: linux-mipsle
+          - goos: linux
+            goarch: mips64
+            name: linux-mips64
+          - goos: linux
+            goarch: mips64le
+            name: linux-mips64le
+          
+          # Linux 其他架构
+          - goos: linux
+            goarch: ppc64le
+            name: linux-ppc64le
+          - goos: linux
+            goarch: riscv64
+            name: linux-riscv64
+          
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            name: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            name: darwin-arm64
+          
+          # Windows
+          - goos: windows
+            goarch: amd64
+            name: windows-amd64
+          - goos: windows
+            goarch: "386"
+            name: windows-386
+          - goos: windows
+            goarch: arm64
+            name: windows-arm64
+          
+          # FreeBSD (部分路由器固件)
+          - goos: freebsd
+            goarch: amd64
+            name: freebsd-amd64
+          - goos: freebsd
+            goarch: arm64
+            name: freebsd-arm64
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.17'
+        go-version: '1.23'
 
     - name: Install dependencies
       run: go mod download
 
-    - name: Build for ARM Cortex-A7
+    - name: Install UPX
       run: |
-            CGO_ENABLED=0 GOARCH=arm GOARM=7 GOOS=linux go build -ldflags="-s -w" -o login-arm-cortex-a7
-            upx -9 login-arm-cortex-a7
-      env:
-        GOARCH: arm
-        GOARM: 7
-        GOOS: linux
+        sudo apt-get update
+        sudo apt-get install -y upx-ucl
 
-    - name: Archive build
+    - name: Build binary
+      env:
+        CGO_ENABLED: 0
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
+      run: |
+        OUTPUT_NAME="login-${{ matrix.name }}"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          OUTPUT_NAME="${OUTPUT_NAME}.exe"
+        fi
+        
+        go build -ldflags="-s -w" -o "${OUTPUT_NAME}"
+        
+        echo "Built: ${OUTPUT_NAME}"
+        ls -lh "${OUTPUT_NAME}"
+
+    - name: Create UPX compressed version
+      run: |
+        OUTPUT_NAME="login-${{ matrix.name }}"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          OUTPUT_NAME="${OUTPUT_NAME}.exe"
+        fi
+        
+        UPX_NAME="login-${{ matrix.name }}-upx"
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          UPX_NAME="${UPX_NAME}.exe"
+        fi
+        
+        cp "${OUTPUT_NAME}" "${UPX_NAME}"
+        upx -9 "${UPX_NAME}" || echo "UPX compression failed for ${{ matrix.name }}"
+        
+        if [ -f "${UPX_NAME}" ]; then
+          echo "Compressed: ${UPX_NAME}"
+          ls -lh "${UPX_NAME}"
+        fi
+
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: login-arm-cortex-a7
-        path: ./login-arm-cortex-a7
+        name: login-${{ matrix.name }}
+        path: |
+          login-${{ matrix.name }}*
+        retention-days: 30
