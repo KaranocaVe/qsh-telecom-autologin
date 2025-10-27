@@ -122,6 +122,11 @@ jobs:
         echo "Built: ${OUTPUT_NAME}"
         ls -lh "${OUTPUT_NAME}"
 
+    - name: List built files
+      run: |
+        echo "Files before UPX compression:"
+        ls -lh login-${{ matrix.name }}* || true
+
     - name: Create UPX compressed version
       run: |
         OUTPUT_NAME="login-${{ matrix.name }}"
@@ -134,21 +139,42 @@ jobs:
           UPX_NAME="${UPX_NAME}.exe"
         fi
         
-        echo "Original size:"
+        echo "=== Original binary ==="
         ls -lh "${OUTPUT_NAME}"
+        ORIGINAL_SIZE=$(stat -f%z "${OUTPUT_NAME}" 2>/dev/null || stat -c%s "${OUTPUT_NAME}")
+        echo "Original size: ${ORIGINAL_SIZE} bytes"
         
         cp "${OUTPUT_NAME}" "${UPX_NAME}"
         
-        echo "Compressing with UPX..."
+        echo ""
+        echo "=== Compressing with UPX ==="
         if upx --best --lzma "${UPX_NAME}"; then
-          echo "Compressed size:"
+          COMPRESSED_SIZE=$(stat -f%z "${UPX_NAME}" 2>/dev/null || stat -c%s "${UPX_NAME}")
+          echo "Compressed size: ${COMPRESSED_SIZE} bytes"
+          RATIO=$((100 - (COMPRESSED_SIZE * 100 / ORIGINAL_SIZE)))
+          echo "Compression ratio: ${RATIO}%"
           ls -lh "${UPX_NAME}"
-          echo "UPX_SUCCESS=true" >> $GITHUB_ENV
+          
+          echo ""
+          echo "=== Verification ==="
+          if [ "${COMPRESSED_SIZE}" -ge "${ORIGINAL_SIZE}" ]; then
+            echo "WARNING: Compressed file is not smaller, removing it"
+            rm -f "${UPX_NAME}"
+            echo "HAS_UPX=false" >> $GITHUB_ENV
+          else
+            echo "UPX compression successful"
+            echo "HAS_UPX=true" >> $GITHUB_ENV
+          fi
         else
-          echo "UPX compression failed for ${{ matrix.name }}, removing compressed file"
+          echo "UPX compression failed for ${{ matrix.name }}"
           rm -f "${UPX_NAME}"
-          echo "UPX_SUCCESS=false" >> $GITHUB_ENV
+          echo "HAS_UPX=false" >> $GITHUB_ENV
         fi
+
+    - name: List all files
+      run: |
+        echo "All files after compression:"
+        ls -lh login-* || echo "No files found"
 
     - name: Upload original binary
       uses: actions/upload-artifact@v4
@@ -159,7 +185,7 @@ jobs:
 
     - name: Upload UPX compressed binary
       uses: actions/upload-artifact@v4
-      if: env.UPX_SUCCESS == 'true'
+      if: env.HAS_UPX == 'true'
       with:
         name: login-${{ matrix.name }}-upx
         path: login-${{ matrix.name }}-upx${{ matrix.goos == 'windows' && '.exe' || '' }}
